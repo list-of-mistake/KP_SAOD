@@ -926,8 +926,61 @@ bool check_date(string s) {
 
 //функция сравнения дат
 bool date_compare(string get_date, string ret_date) {
+    if (get_date == "0") {
+        return false;
+    }
+    else if (ret_date == "0") {
+        return true;
+    }
     bool b;
     int day, month,year,ret_day,ret_month,ret_year;
+    string t;
+    t = get_date.substr(0, 2);
+    day = stoi(t);
+    t = get_date.substr(3, 2);
+    month = stoi(t);
+    t = get_date.substr(6, 4);
+    year = stoi(t);
+    t = ret_date.substr(0, 2);
+    ret_day = stoi(t);
+    t = ret_date.substr(3, 2);
+    ret_month = stoi(t);
+    t = ret_date.substr(6, 4);
+    ret_year = stoi(t);
+    if ((ret_year > year)) {
+        return true;
+    }
+    else if (ret_year == year) {
+        if (ret_month > month) {
+            return true;
+        }
+        else if (ret_month == month) {
+            if (ret_day >= day) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+//функция сравнения дат по возрастанию для возврата
+bool date_compare1(string get_date, string ret_date) {
+    if (get_date == "0") {
+        return true;
+    }
+    else if (ret_date == "0") {
+        return false;
+    }
+    bool b;
+    int day, month, year, ret_day, ret_month, ret_year;
     string t;
     t = get_date.substr(0, 2);
     day = stoi(t);
@@ -1426,7 +1479,7 @@ list* sort(list* l,int ask) {
             while (t2 != nullptr) {
                 if (t2 != t) {
                     if (t->connect.return_date != "0") {
-                        if (date_compare(t2->connect.return_date, t->connect.return_date)) {
+                        if (date_compare1(t2->connect.return_date, t->connect.return_date)) {
                             num++;
                         }
                     }
@@ -1524,18 +1577,13 @@ list* delete_read_book(reader tab[2000],list*l,tree*t) {
             num_lib_card = correct_cin();
             n = find_h(tab, num_lib_card);
         }
-        //удалить из списка связи с читателем(вернуть книги)
         while (l1) {
             if ((l1->connect.number_library_card == num_lib_card) && (l1->connect.return_date == "0")) {
-                /*int cip = getnumfromcipher(l1->connect.cipher);
-                tree* tmp = find_in_tree(t, cip);
-                tmp->b.number_copy_stock++;
-                l = delete_l(l, l1->connect.cipher, num_lib_card);*/
                 cout << "Есть выданные книги, читатель не может быть удален\n";
                 return l;
             }
             else if (l1->connect.number_library_card == num_lib_card) {
-                l1 = delete_l(l1, l1->connect.cipher, num_lib_card);
+                l1 = delete_l(l, l1->connect.cipher, num_lib_card);
             }
             l1 = l1->next;
         }
@@ -1562,20 +1610,19 @@ list* delete_read_book(reader tab[2000],list*l,tree*t) {
             c = getnumfromcipher(cipher);
             tmp = find_in_tree(t, c);
         }
-        //удалить из списка связи с книгой(вернуть книги)
         while (l1) {
             if ((l1->connect.cipher == cipher)&&(l1->connect.return_date=="0")) {
                 cout << "Книга не может быть удалена, экземпляры выданы на руки\n";
                 return l;
             }
             else if (l1->connect.cipher == cipher) {
-                l1 = delete_l(l1, cipher, l1->connect.number_library_card);
+                l1 = delete_l(l, cipher, l1->connect.number_library_card);
             }
             l1 = l1->next;
         }
         t = delete_el(t, c);
     }
-    return l1;
+    return l;
 }
 
 //функция меню сортировки 
@@ -1713,7 +1760,6 @@ int main()
             save_hash_tab(tab);
             save_tree(t);
             save_list(l);
-            rec_t.close();
         }
         else if (choose == 8) {//редактирование бд
             l=delete_read_book(tab, l, t);
