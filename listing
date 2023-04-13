@@ -1,0 +1,1756 @@
+// Предметная область -  Обслуживание читателей в библиотеке (см. п. 9.1)
+// Метод хеширования - Закрытое хеширование с квадратичным опробованием
+// Метод соортировки - Подсчетом
+// Вид списка - Линейный однонаправленный
+// Метод обхода дерева - Симметричный
+// Алгоритм поиска слова в тексте - Боуера и Мура (БМ)
+
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <Windows.h>
+#include <cmath>
+
+using namespace std;
+
+const int c = 3;
+
+string correct_cin();
+bool rus_simbol(string s);
+
+//структура читателя
+struct reader {
+    string number_library_card;
+    string fns;
+    int year_birth;
+    string address;
+    string place_employment;
+};
+
+//структура книги
+struct book {
+    string cipher;
+    string author;
+    string title;
+    string publishing_house;
+    int year_publishing;
+    int number_copy_total;
+    int number_copy_stock;
+};
+
+//структура связей
+struct issuance {
+    string number_library_card;
+    string cipher;
+    string date_issue;
+    string return_date;
+};
+
+//хеш-функция
+int hash_f(string s) {
+    int h = pow((int)s.at(0), 2) + pow((int)s.at(1), 2) + pow((int)s.at(2), 2) + pow((int)s.at(3), 2) + pow((int)s.at(4), 2) + pow((int)s.at(5), 2) + pow((int)s.at(6), 2) + pow((int)s.at(7), 2);
+    h %= 2000;
+    return h;
+}
+
+//функция добавления в хеш-таблицу
+bool add_h(reader tab[2000], int n,reader t) {
+    for (int i = 0; i < 11; i++) {
+        int b = n + c * i + pow(i, i);
+        if (b >= 2000) {
+            break;
+        }
+        if ((tab[i].number_library_card == "\0") || (tab[b].number_library_card == "1")) {
+            for (int j = 0; j < 8; j++) {
+                tab[b] = t;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+//функция получения хеш-таблицы из файла
+reader* record_h() {
+    ifstream record;
+    record.open("hash.txt");
+    string s;
+    reader* tab = new reader[2000];
+    for (int i = 0; i < 2000; i++) {
+            tab[i].number_library_card = "\0";
+            tab[i].address = "\0";
+            tab[i].fns = "\0";
+            tab[i].place_employment = "\0";
+            tab[i].year_birth = 0;
+    }
+    int i;
+    while(getline(record,s)) {
+        string tmp;
+        int count = 0;
+        for (int ch = 0; ch != s.size(); ch++) {
+            if (s.at(ch) == ':') {
+                if (count == 0) {
+                    i = stoi(tmp);
+                }
+                else if (count == 1) {
+                    tab[i].number_library_card = tmp;
+                }
+                else if (count == 2) {
+                    tab[i].fns = tmp;
+                }
+                else if (count == 3) {
+                    tab[i].year_birth = stoi(tmp);
+                }
+                else if (count == 4) {
+                    tab[i].address = tmp;
+                }
+                count++;
+                tmp = "";
+            }
+            else if (s.at(ch) == ';') {
+                tab[i].place_employment = tmp;
+            }
+            else {
+                tmp += s.at(ch);
+            }
+        }
+    }
+    return tab;
+}
+
+//функция вывода хеш-таблицы
+void show_h(reader t[2000]) {
+    for (int i = 0; i < 2000; i++) {
+        if (t[i].number_library_card == "\0") {
+            continue;
+        }
+        else {
+            cout << i << ":";
+            cout << t[i].number_library_card << ":" << t[i].fns << ":" << t[i].year_birth << ":" << t[i].address << ":" << t[i].place_employment;
+        }
+        cout << "\n";
+    }
+}
+
+//функция поиска в хеш-таблице
+int find_h(reader t[2000], string k) {
+    int b = hash_f(k);
+    for (int i = 0; i < 11; i++) {
+        int y = b + pow(i,i);
+        if (y > 2000) { break; }
+        if (t[y].number_library_card != "\0") {
+            if (t[y].number_library_card == k) {
+                return y;
+            }
+        }
+        else {
+            return -1;
+        }
+    }
+    return -1;
+
+}
+
+//функция удаления из хеш-таблицы
+bool del_h(reader t[2000], string k) {
+    if (find_h(t, k) == -1)
+        return false;
+    int i = find_h(t, k);
+    reader r;
+    r.fns = "";
+    r.address = "";
+    r.number_library_card = "";
+    r.place_employment = "";
+    r.year_birth = 0;
+    t[i] = r;
+    return true;
+}
+
+//сохранить хеш-таблицу
+void save_hash_tab(reader tab[2000]) {
+    ofstream record;
+    record.open("hash.txt");
+    for (int i = 0; i < 2000; i++) {
+        if (tab[i].number_library_card != "\0") {
+            record << i << ":";
+            record << tab[i].number_library_card << ':' << tab[i].fns << ':' << tab[i].year_birth << ':' << tab[i].address << ':' << tab[i].place_employment << ';';
+            record << "\n";
+        }
+    }
+    record.close();
+}
+
+//функция получения числа из шифра книги
+int getnumfromcipher(string cip) {
+    string s;
+    s.resize(7);
+    for (int i = 0; i < 6; i++) {
+        if (i < 3) {
+            s.at(i) = cip.at(i);
+        }
+        else {
+            s.at(i) = cip.at(i + 1);
+        }
+    }
+    int num = stoi(s);
+    return num;
+}
+
+//Авл-дерево для книг
+struct tree {
+    int elem;
+    book b;
+    int height;
+    tree* left;
+    tree* right;
+};
+
+//инициализация дерева
+tree* init_tree(int elem,book b) {
+    tree* root = new tree;
+    root->elem = elem;
+    root->b = b;
+    root->height = 1;
+    root->left = nullptr;
+    root->right = nullptr;
+    return root;
+}
+
+//возврат высоты для дерева
+int height(tree* p)
+{
+    if (p == nullptr) {
+        return 0;
+    }
+    return p->height;
+}
+
+//разница высот между ветвями дерева
+int balance_f(tree* r) {
+    int hr = height(r->right);
+    int hl = height(r->left);
+    return hr - hl;
+}
+
+//вернуть правильную высоту дерева
+void fixheight(tree* r) {
+    int rl = height(r->left);
+    int rf = height(r->right);
+    r->height = (rl > rf ? rl : rf) + 1;
+}
+
+//правый поворот для дерева
+tree* rightrotate(tree* root) {
+    tree* l = root->left;
+    root->left = l->right;
+    l->right = root;
+    fixheight(root);
+    fixheight(l);
+    return l;
+}
+
+//левый поворот для дерева
+tree* leftrotate(tree* root) {
+    tree* r = root->right;
+    root->right = r->left;
+    r->left = root;
+    fixheight(root);
+    fixheight(r);
+    return r;
+}
+
+//балансировка дерева
+tree* balance(tree* root) {
+    fixheight(root);
+    int i = balance_f(root);
+    if (i == -2) {
+        if (balance_f(root->left) > 0) {
+            root->left = leftrotate(root->left);
+        }
+        return rightrotate(root);
+    }
+    else if (i == 2) {
+        if (balance_f(root->right) < 0) {
+            root->right = rightrotate(root->right);
+        }
+        return leftrotate(root);
+    }
+    else return root;
+}
+
+//добавление элемента в дерево
+tree* insert(tree* root, int el,book b) {
+    tree* tmp = root;
+    if (tmp == nullptr) {
+        return init_tree(el,b);
+    }
+    else if (el < root->elem) {
+        tmp->left = insert(tmp->left, el, b);
+    }
+    else {
+        tmp->right = insert(tmp->right, el, b);
+    }
+    return balance(tmp);
+}
+
+//поиск в дереве с возвратом элемента (ветки)
+tree* find_in_tree(tree* root, int el) {
+    tree* tmp = root;
+    if (tmp == nullptr) {
+        return nullptr;
+    }
+    while (tmp != nullptr) {
+        if (tmp == nullptr) {
+            return nullptr;
+        }
+        else {
+            if (tmp->elem > el) {
+                tmp = tmp->left;
+            }
+            else if (tmp->elem < el) {
+                tmp = tmp->right;
+            }
+            else {
+                return tmp;
+            }
+        }
+    }
+    return nullptr;
+}
+
+//возвращает минимальный элемент в правом поддереве
+tree* min_in_right(tree* root) {
+    return root->left ? min_in_right(root->left) : root;
+}
+
+//удаляет минимальный элемент в правом поддереве
+tree* delete_min_in_right(tree* root) {
+    if (root->left == nullptr)
+        return root->right;
+    root->left = delete_min_in_right(root->left);
+    return balance(root);
+}
+
+//удаляет элемент из дерева
+tree* delete_el(tree* root, int el) {
+    if (root == nullptr) {
+        return nullptr;
+    }
+    else if (el < root->elem) {
+        root->left = delete_el(root->left, el);
+    }
+    else if (el > root->elem) {
+        root->right = delete_el(root->right, el);
+    }
+    else {
+        tree* l = root->left;
+        tree* r = root->right;
+        delete root;
+        if (r == nullptr) {
+            return l;
+        }
+        tree* min = min_in_right(r);
+        r = delete_min_in_right(r);
+        min->left = l;
+        min->right = r;
+        return balance(min);
+    }
+    return balance(root);
+}
+
+//вывод дерева
+void out_tree(tree* root, int l = 0) {
+    if (root) {
+        out_tree(root->left, l + 1);
+        for (int i = 1; i <= l; i++)
+            cout << "\t";
+        cout << root->elem<<" Шифр "<< root->b.cipher<<" Книга "<<root->b.title <<" осталось экземпляров " <<root->b.number_copy_stock<<" из " <<root->b.number_copy_total<< endl;
+        out_tree(root->right, l + 1);
+    }
+}
+
+//удаление всего дерева
+void delete_full_tree(tree* root) {
+    if (root) {
+        delete_full_tree(root->left);
+        delete root->left;
+        delete_full_tree(root->right);
+        delete root->right;
+    }
+}
+
+fstream rec_t("tree.txt");
+//сохранение дерева
+void save_tree(tree* t) {
+    if (t) {
+        save_tree(t->left);
+        rec_t << t->elem << ":" << t->b.cipher <<":"<< t->b.author <<":" << t->b.title <<":"<< t->b.publishing_house <<":"<< t->b.year_publishing <<":" << t->b.number_copy_total <<":" << t->b.number_copy_stock<<";" << endl;
+        save_tree(t->right);
+    }
+}
+
+//загрузка дерева из файла
+tree* get_tree() {
+    string s,slovo;
+    book kn;
+    tree* t=nullptr;
+    while (getline(rec_t,s)) {
+        int n1 = 0;
+        int el;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.at(i) == ':') {
+                if (n1 == 0) {
+                    el = stoi(slovo);
+                }
+                else if (n1 == 1) {
+                    kn.cipher = slovo;
+                }
+                else if (n1 == 2) {
+                    kn.author = slovo;
+                }
+                else if (n1 == 3) {
+                    kn.title = slovo;
+                }
+                else if (n1 == 4) {
+                    kn.publishing_house = slovo;
+                }
+                else if (n1 == 5) {
+                    kn.year_publishing=stoi(slovo);
+                }
+                else if (n1 == 6) {
+                    kn.number_copy_total = stoi(slovo);
+                }
+                slovo = "";
+                n1++;
+            }
+            else if(s.at(i)==';') {
+                kn.number_copy_stock = stoi(slovo);
+                slovo = "";
+            }
+            else {
+                slovo += s.at(i);
+            }
+        }
+        t = insert(t, el, kn);
+    }
+    return t;
+}
+
+//вспомогательная структура, список для дерева
+struct lis {
+    book b;
+    lis* next;
+};
+
+//добавление в вспомогательный список
+lis* add_lis(lis* l1, book b) {
+    if (l1 == nullptr) {
+        l1 = new lis;
+        l1->b = b;
+        l1->next = nullptr;
+    }
+    else {
+        lis* tmp = l1;
+        while (tmp->next != nullptr) {
+            tmp = tmp->next;
+        }
+        lis* t = new lis;
+        t->next = nullptr;
+        tmp->next = t;
+        tmp = tmp->next;
+        tmp->b = b;
+    }
+    return l1;
+}
+
+//функция получения списка из дерева
+lis* traversal(tree* t,lis* l1) {
+    if (t) {
+        l1 = traversal(t->left, l1);
+        l1 = add_lis(l1, t->b);
+        l1 = traversal(t->right, l1);
+        return l1;
+    }
+}
+
+//список связей
+struct list {
+    issuance connect;
+    list *next;
+};
+
+//сохранить в файл список связей
+void save_list(list* l) {
+    ofstream record;
+    record.open("list.txt");
+    while (l) {
+        record << l->connect.cipher << ":" << l->connect.number_library_card << ":" << l->connect.date_issue << ":" << l->connect.return_date<<";"<< endl;
+        l = l->next;
+    }
+    record.close();
+}
+
+//функция получения даты возврата
+string return_date(string date) {
+    string return_date;
+    return_date.resize(10);
+    for (int i = 0; i < 10; i++) {
+        if (i != 4) {
+            return_date.at(i) = date.at(i);
+        }
+        else {
+            if ((date.at(i) >= 48) && (date.at(i) <= 56)) {
+               return_date.at(i) = date.at(i) + 1;
+            }
+            else {
+                return_date.at(3) = '1';
+                return_date.at(4) = '0';
+            }
+        }
+    }
+    if ((return_date.at(3) == '1') && (return_date.at(4) == '3')) {
+        if ((return_date.at(9) >= 48) && (return_date.at(9) <= 56))
+            return_date.at(9)++;
+        else {
+            return_date.at(8)++;
+            return_date.at(9) = '0';
+        }
+        return_date.at(3) = '0';
+        return_date.at(4) = '1';
+    }
+    else if ((return_date.at(0) == '3') && ((return_date.at(1) == '1'))) {
+        return_date.at(1) = '0';
+    }
+    else if ((return_date.at(4) == '2') && ((return_date.at(3) == '0')) && (return_date.at(0) == '3')) {
+        string year;
+        year.resize(5);
+        for (int i = 0; i < 3; i++)
+            year.at(i) = return_date.at(i + 6);
+        year.at(4) = '\0';
+        int ye = stoi(year);
+        if (ye % 4 != 0) {
+            return_date.at(0) = '2';
+            return_date.at(1) = '8';
+        }
+        else {
+            return_date.at(0) = '2';
+            return_date.at(1) = '9';
+        }
+    }
+    return return_date;
+}
+
+//функция добавления в список связей
+list* add_in_list(list* f,issuance is) {
+    if (f == nullptr) {
+        f = new list;
+        f->connect.cipher = is.cipher;
+        f->connect.date_issue = is.date_issue;
+        f->connect.number_library_card = is.number_library_card;
+        f->connect.return_date = is.return_date;
+        f->next = nullptr;
+    }
+    else {
+        list* tmp = f;
+        while (tmp->next != nullptr) {
+            tmp = tmp->next;
+        }
+        list* t = new list;
+        t->next = nullptr;
+        tmp->next = t;
+        tmp = tmp->next;
+        tmp->connect.number_library_card = is.number_library_card;
+        tmp->connect.cipher = is.cipher;
+        tmp->connect.date_issue = is.date_issue;
+        tmp->connect.return_date = is.return_date;
+    }
+    return f;
+}
+
+//загрузить список из файла
+list* get_list(reader *tab,tree* tr) {
+    ifstream record;
+    record.open("list.txt");
+    string s, slovo;
+    issuance is;
+    list* l = nullptr;
+    while (getline(record,s)) {
+        int n1 = 0;
+        for (int i = 0; i < s.length(); i++) {
+            if (s.at(i) == ':') {
+                n1++;
+                if (n1 == 1) {
+                    is.cipher = slovo;
+                }
+                else if (n1 == 2) {
+                    is.number_library_card = slovo;
+                }
+                else if (n1 == 3) {
+                    is.date_issue = slovo;
+                }
+                slovo = "";
+            }
+            else if(s.at(i)==';') {
+                is.return_date = slovo;
+                slovo = "";
+            }
+            else {
+                slovo += s.at(i);
+            }
+        }
+        int el = getnumfromcipher(is.cipher);
+        if ((find_h(tab, is.number_library_card) != -1)&&(find_in_tree(tr,el)!=nullptr)) {
+            l = add_in_list(l, is);
+        }
+    }
+    return l;
+}
+
+//функция поиска в списке связей
+list* find_in_list(list* f, string cip, string libracy_card) {
+    while ((f->connect.cipher != cip) || (f->connect.number_library_card != libracy_card)) {
+        f = f->next;
+    }
+    return f;
+}
+
+//функция вывода списка связи
+void show_list(list* f) {
+    while (f != nullptr) {
+        cout << "Номер читательского билета " << f->connect.number_library_card << ", шифр " << f->connect.cipher << ", дата выдачи " << f->connect.date_issue << ", дата возврата " << f->connect.return_date << endl;
+        f = f->next;
+    }
+}
+
+//функция удаления связи из списка
+list* delete_l(list* l, string cip, string num) {
+    list* tmp = l;
+    if ((tmp->connect.cipher == cip) && (tmp->connect.number_library_card == num)) {
+        return tmp->next;
+    }
+    while ((tmp->next->connect.cipher != cip) || (tmp->next->connect.number_library_card != num)) {
+        tmp = tmp->next;
+    }
+    list* tmp1 = tmp->next->next;
+    tmp->next = tmp1;
+    return l;
+}
+
+// функция для перехода из верхнего регистра в нижний
+string s_lower(string r)
+{
+    int c = r.length();
+    for (int i = 0; i < c; i++) {
+        switch (r.at(i))
+        {
+        case 'А': r.at(i) = 'а'; break;
+        case 'Б': r.at(i) = 'б'; break;
+        case 'В': r.at(i) = 'в'; break;
+        case 'Г': r.at(i) = 'г'; break;
+        case 'Д': r.at(i) = 'д'; break;
+        case 'Е': r.at(i) = 'е'; break;
+        case 'Ё': r.at(i) = 'ё'; break;
+        case 'Ж': r.at(i) = 'ж'; break;
+        case 'З': r.at(i) = 'з'; break;
+        case 'И': r.at(i) = 'и'; break;
+        case 'Й': r.at(i) = 'й'; break;
+        case 'К': r.at(i) = 'к'; break;
+        case 'Л': r.at(i) = 'л'; break;
+        case 'М': r.at(i) = 'м'; break;
+        case 'Н': r.at(i) = 'н'; break;
+        case 'О': r.at(i) = 'о'; break;
+        case 'П': r.at(i) = 'п'; break;
+        case 'Р': r.at(i) = 'р'; break;
+        case 'С': r.at(i) = 'с'; break;
+        case 'Т': r.at(i) = 'т'; break;
+        case 'У': r.at(i) = 'у'; break;
+        case 'Ф': r.at(i) = 'ф'; break;
+        case 'Х': r.at(i) = 'х'; break;
+        case 'Ц': r.at(i) = 'ц'; break;
+        case 'Ч': r.at(i) = 'ч'; break;
+        case 'Ш': r.at(i) = 'ш'; break;
+        case 'Щ': r.at(i) = 'щ'; break;
+        case 'Ъ': r.at(i) = 'ъ'; break;
+        case 'Ы': r.at(i) = 'ы'; break;
+        case 'Ь': r.at(i) = 'ь'; break;
+        case 'Э': r.at(i) = 'э'; break;
+        case 'Ю': r.at(i) = 'ю'; break;
+        case 'Я': r.at(i) = 'я'; break;
+        default: r.at(i) = tolower(r.at(i));
+        }
+    }
+    return (r);
+}
+
+// функция для перехода из нижнего регистра в верхний
+char char_upper(char r)
+{
+    switch (r)
+    {
+        case 'а': r = 'А'; break;
+        case 'б': r = 'Б'; break;
+        case 'в': r = 'В'; break;
+        case 'г': r = 'Г'; break;
+        case 'д': r = 'Д'; break;
+        case 'е': r = 'Е'; break;
+        case 'ё': r = 'Ё'; break;
+        case 'ж': r = 'Ж'; break;
+        case 'з': r = 'З'; break;
+        case 'и': r = 'И'; break;
+        case 'й': r = 'Й'; break;
+        case 'к': r = 'К'; break;
+        case 'л': r = 'Л'; break;
+        case 'м': r = 'М'; break;
+        case 'н': r = 'Н'; break;
+        case 'о': r = 'О'; break;
+        case 'п': r = 'П'; break;
+        case 'р': r = 'Р'; break;
+        case 'с': r = 'С'; break;
+        case 'т': r = 'Т'; break;
+        case 'у': r = 'У'; break;
+        case 'ф': r = 'Ф'; break;
+        case 'х': r = 'Х'; break;
+        case 'ц': r = 'Ц'; break;
+        case 'ч': r = 'Ч'; break;
+        case 'ш': r = 'Ш'; break;
+        case 'щ': r = 'Щ'; break;
+        case 'ъ': r = 'Ъ'; break;
+        case 'ы': r = 'Ы'; break;
+        case 'ь': r = 'Ь'; break;
+        case 'э': r = 'Э'; break;
+        case 'ю': r = 'Ю'; break;
+        case 'я': r = 'Я'; break;
+        default: r = toupper(r);
+    }
+    return (r);
+}
+
+//функция проверки номера читательского билета
+bool check_number_libracy_card (string n) {
+    if (n.length() != 8)
+        return false;
+    for (int i = 0; i < n.length(); i++) {
+        if (i == 0) {
+            if ((n.at(i) != 'А') && (n.at(i) != 'а') && (n.at(i) != 'Ч') && (n.at(i) != 'ч') && (n.at(i) != 'В') && (n.at(i) != 'в')) {
+                return false;
+            }
+        }else if (i == 5) {
+            if ((n.at(i) != '-'))
+                return false;
+        }
+        else {
+            if ((n.at(i) < 48) || (n.at(i) > 57))
+                return false;
+        }
+    }
+    return true;
+}
+
+//функция проверки года
+bool check_year(string n) {
+    if (n.length() != 4)
+        return false;
+    for (int i = 0; i < 4; i++) {
+        if ((n.at(i) < 48) || (n.at(i) > 57)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//функция добавления нового читателя
+reader create_reader() {
+    reader r;
+    cout << "Введите номер читательского билета, формат ANNNN-YY\n";
+    r.number_library_card = correct_cin();
+    r.number_library_card.at(0) = char_upper(r.number_library_card.at(0));
+    while (!check_number_libracy_card(r.number_library_card)) {
+        cout << "Неправильный формат билета, повторите ввод\n";
+        r.number_library_card = correct_cin();
+        r.number_library_card.at(0) = char_upper(r.number_library_card.at(0));
+    }
+    cout << "Введите фамилию читателя в формате: Иванов\n";
+    string fam;
+    fam = correct_cin();
+    while (!rus_simbol(fam)) {
+        cout << "Некорректные символы в фамилии, повторите ввод\n";
+        fam = correct_cin();
+    }
+    cout << "Введите имя читателя в формате: Иван\n";
+    string name;
+    name = correct_cin();
+    while (!rus_simbol(name)) {
+        cout << "Некорректные символы в имени, повторите ввод\n";
+        name = correct_cin();
+    }
+    cout << "Введите отчество читателя в формате: Иванович\n";
+    string sur;
+    sur = correct_cin();
+    while (!rus_simbol(sur)) {
+        cout << "Некорректные символы в отчестве, повторите ввод\n";
+        sur = correct_cin();
+    }
+    fam = s_lower(fam);
+    fam.at(0) = char_upper(fam.at(0));
+    name = s_lower(name);
+    name.at(0) = char_upper(name.at(0));
+    sur = s_lower(sur);
+    sur.at(0) = char_upper(sur.at(0));
+    string fns = fam;
+    fns.append(" ");
+    fns.append(name);
+    fns.append(" ");
+    fns.append(sur);
+    r.fns=fns;
+    cout << "Введите год рождения читателя\n";
+    string year_birth;
+    year_birth = correct_cin();
+    while (!check_year(year_birth)) {
+        cout << "Некорректный год, повторите ввод\n";
+        year_birth = correct_cin();
+    }
+    r.year_birth = stoi(year_birth);
+    cout << "Введите место работы/учёбы читателя\n";
+    getline(cin,r.place_employment,'\n');
+    cout << "Введите адрес читателя\n";
+    getline(cin, r.address, '\n');
+    return r;
+}
+
+//функция проверки шифра
+bool check_cipher(string cip) {
+    if (cip.length() != 7)
+        return false;
+    for (int i = 0; i < 7; i++) {
+        if (i != 3) {
+            if ((cip.at(i) < 48) || (cip.at(i) > 57))
+                return false;
+        }
+        else {
+            if (cip.at(i) != '.')
+                return false;
+        }
+    }
+    return true;
+}
+
+//функция проверки количества
+bool check_number(string n) {
+    for (int i = 0; i < n.length(); i++) {
+        if ((n.at(i) < 48) || (n.at(i) > 57))
+            return false;
+    }
+    return true;
+}
+
+//функция добавления новой книги
+book create_book() {
+    book b;
+    cout << "Введите шифр книги, формат NNN.MMM ,где NNN-номер раздела, MMM-номер в разделе\n";
+    b.cipher = correct_cin();
+    while (!check_cipher(b.cipher)) {
+        cout << "Некорректный шифр, повторите ввод\n";
+        b.cipher = correct_cin();
+    }
+    cout << "Какое название книги?\n";
+    getline(cin,b.title,'\n');
+    while (!rus_simbol(b.title)) {
+        cout << "Название должно содержать только русские буквы,повторите ввод\n";
+        getline(cin, b.title, '\n');
+    }
+    cout << "Кто автор книги?\n";
+    getline(cin,b.author,'\n');
+    while (!rus_simbol(b.author)) {
+        cout << "Имя автора должно содержать только русские буквы,повторите ввод\n";
+        getline(cin, b.author, '\n');
+    }
+    cout << "Какое издательство книги?\n";
+    getline(cin, b.publishing_house, '\n');
+    while (!rus_simbol(b.publishing_house)) {
+        cout << "Название издательства должно содержать только русские буквы,повторите ввод\n";
+        getline(cin, b.publishing_house, '\n');
+    }
+    cout << "Какой год издательства книги?\n";
+    string year_publishing;
+    year_publishing = correct_cin();
+    while (!check_year(year_publishing)) {
+        cout << "Некорректный год, повторите ввод\n";
+        year_publishing = correct_cin();
+    }
+    b.year_publishing = stoi(year_publishing);
+    cout << "Сколько экземпляров книги в библиотеке всего?\n";
+    string number_copy_total;
+    number_copy_total = correct_cin();
+    while (!check_number(number_copy_total)) {
+        cout << "Некорректное количество, повторите ввод\n";
+        number_copy_total = correct_cin();
+    }
+    b.number_copy_total = stoi(number_copy_total);
+    b.number_copy_stock = stoi(number_copy_total);
+    return b;
+}
+
+//функция проверки даты
+bool check_date(string s) {
+    if (s.length() != 10) {
+        return false;
+    }
+    string t;
+    int day, month, year;
+    for (int i = 0; i < 10; i++) {
+        if ((i == 2) || (i == 5)) {
+            if (s.at(i) != '.') {
+                return false;
+            }
+        }
+        else {
+            if ((s.at(i) < 48) || (s.at(i) > 57)) {
+                return false;
+            }
+        }
+    }
+    t =s.substr(0,2);
+    day = stoi(t);
+    t = s.substr(3,2);
+    month = stoi(t);
+    t = s.substr(6,4);
+    year = stoi(t);
+    if (month > 12) {
+        return false;
+    }
+    if (((day > 30) && (month % 2 == 0)&&(month<8))||((day>30)&&(month%2==1)&&(month>7)) || (day > 31)||((month==2)&&(day>29)&&(year%4==0)) || ((month == 2) && (day > 28) && (year % 4 == 1))) {
+        return false;
+    }
+    return true;
+}
+
+//функция сравнения дат
+bool date_compare(string get_date, string ret_date) {
+    bool b;
+    int day, month,year,ret_day,ret_month,ret_year;
+    string t;
+    t = get_date.substr(0, 2);
+    day = stoi(t);
+    t = get_date.substr(3, 2);
+    month = stoi(t);
+    t = get_date.substr(6, 4);
+    year = stoi(t);
+    t = ret_date.substr(0, 2);
+    ret_day = stoi(t);
+    t = ret_date.substr(3, 2);
+    ret_month = stoi(t);
+    t = ret_date.substr(6, 4);
+    ret_year = stoi(t);
+    if ((ret_year > year)) {
+        return true;
+    }
+    else if (ret_year == year) {
+        if (ret_month > month) {
+            return true;
+        }
+        else if (ret_month == month) {
+            if (ret_day >= day) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            return false;
+        }
+    }
+    else {
+        return false;
+    }
+}
+
+//функция добавления связи
+issuance create_issuance(tree* t,reader tab[2000]) {
+    issuance is;
+    string s;
+    cout << "Введите шифр нужной книги\n";
+    s = correct_cin();
+    while (!check_cipher(s)) {
+        cout << "Повторите ввод\n";
+        s = correct_cin();
+    }
+    int el = getnumfromcipher(s);
+    tree* tmp = find_in_tree(t, el);
+    if (!tmp) {
+        cout << "Не найдена нужная книга, повторите ввод\n";
+        s = correct_cin();
+        while (!check_cipher(s)) {
+            cout << "Повторите ввод\n";
+            s = correct_cin();
+        }
+        el = getnumfromcipher(s);
+        tmp = find_in_tree(t, el);
+    }
+    while (tmp->b.number_copy_stock == 0) {
+        cout << "Экземпляров книги не осталось, для выдачи другой книги введите 1, для выхода в меню введите другое число\n";
+        s = correct_cin();
+        if (stoi(s) == 1) {
+            cout << "Введите шифр нужной книги\n";
+            s = correct_cin();
+            while (!check_cipher(s)) {
+                cout << "Повторите ввод\n";
+                s = correct_cin();
+            }
+            int el = getnumfromcipher(s);
+            tmp = find_in_tree(t, el);
+            if (!tmp) {
+                cout << "Не найдена нужная книга, повторите ввод\n";
+                s = correct_cin();
+                while (!check_cipher(s)) {
+                    cout << "Повторите ввод\n";
+                    s = correct_cin();
+                }
+                el = getnumfromcipher(s);
+                tmp = find_in_tree(t, el);
+            }
+        }
+        else {
+            is.cipher = "0";
+            is.date_issue = "0";
+            is.number_library_card = "0";
+            is.return_date = "0";
+            return is;
+        }
+    }
+    cout << "Введите номер читательского билета\n";
+    s = correct_cin();
+    while (!check_number_libracy_card(s)) {
+        cout << "Повторите ввод\n";
+        s = correct_cin();
+    }
+    int num = find_h(tab, s);
+    if (num == -1) {
+        cout << "Читатель не найден в хэш-таблице, повторите ввод\n";
+        s = correct_cin();
+        while (!check_number_libracy_card(s)) {
+            cout << "Повторите ввод\n";
+            s = correct_cin();
+        }
+        num = find_h(tab, s);
+    }
+    cout << "Введите дату выдачи\n";
+    s = correct_cin();
+    while (!check_date(s)) {
+        cout << "Повторите ввод\n";
+        s = correct_cin();
+    }
+    tmp->b.number_copy_stock--;
+    is.cipher = tmp->b.cipher;
+    is.number_library_card = tab[num].number_library_card;
+    is.date_issue = s;
+    is.return_date = "0";
+    return is;
+}
+
+//функция возврата книги
+issuance return_issuance(list *l) {
+    list* t = nullptr;
+    string s, num, date;
+    while (!t) {
+        cout << "Введите шифр книги\n";
+        s = correct_cin();
+        while (!check_cipher(s)) {
+            cout << "Повторите ввод, неправильный шифр\n";
+            s = correct_cin();
+        }
+        cout << "Введите номер читательского билета\n";
+        num = correct_cin();
+        while (!check_number_libracy_card(num)) {
+            cout << "Повторите ввод, неправильный читательский билет\n";
+            num = correct_cin();
+        }
+        t = find_in_list(l, s, num);
+        while (t == nullptr) {
+            cout << "Введите шифр книги\n";
+            s = correct_cin();
+            while (!check_cipher(s)) {
+                cout << "Повторите ввод, неправильный шифр\n";
+                s = correct_cin();
+            }
+            cout << "Введите номер читательского билета\n";
+            num = correct_cin();
+            while (!check_number_libracy_card(num)) {
+                cout << "Повторите ввод, неправильный читательский билет\n";
+                num = correct_cin();
+            }
+            t = find_in_list(l, s, num);
+            if (t->connect.return_date != "0") {
+                cout << "Книга уже возвращена\n";
+                return t->connect;
+            }
+        }
+        cout << "Введите дату возврата\n";
+        date = correct_cin();
+        while ((!check_date(date))|| (!date_compare(t->connect.date_issue, date))) {
+            cout << "Неккоректная дата, повторите ввод\n";
+            date = correct_cin();
+        }
+        t->connect.return_date = date;
+    }
+    return t->connect;
+}
+
+//подсчет колличества элементов в списке
+int length_list(list* l) {
+    int i = 0;
+    while (l != nullptr) {
+        l = l->next;
+        i++;
+    }
+    return i;
+}
+
+//функция поиска по номеру читательского в списке
+list* find_list_bynum(list* f, string num) {
+    list* tmp=f;
+    list* res=nullptr;
+    while (tmp != nullptr) {
+        if (tmp->connect.number_library_card == num) {
+            res = add_in_list(res, tmp->connect);
+        }
+        tmp = tmp->next;
+    }
+    return res;
+}
+
+//вспомогательная функция возвращает максимальный элемент
+int max_el(int a, int b)
+{
+    return (a > b) ? a : b;
+}
+
+// функция для составления таблицы для алгоритма блуэра мура
+void get_tab_of_symbol(string str, int size, int chartab[256])
+{
+    for (int i = 0; i < 256; i++)
+        chartab[i] = -1;
+    for (int i = 0; i < size; i++) {
+        unsigned char ch = str.at(i);
+        int t = (int)ch;
+        chartab[t] = i;
+    }
+}
+
+//функция поиска Боуэра мура
+bool search_BM(string txt, string part)
+{
+    bool f = false;
+    int p = part.length();
+    int t = txt.length();
+    int chartab[256];
+    get_tab_of_symbol(part, p, chartab);
+    int shift = 0; 
+    while (shift <= (t - p))
+    {
+        int j = p - 1;
+        while (j >= 0 && part[j] == txt[shift + j])
+            j--;
+        if (j < 0)
+        {
+            cout << "\n Найдено со сдвигом " << shift << endl;
+            shift += (shift + p < t) ? p - chartab[txt[shift + p]] : 1;
+            f = true;
+            return f;
+        }
+        else {
+            unsigned char ch = txt[shift + j];
+            shift += max_el(1, j - chartab[(int)ch]);
+        }
+    }
+    return f;
+}
+
+//функция поиска по шифру книги
+list* find_list_bycipher(list* f, string cip) {
+    list* tmp = f;
+    list* res=nullptr;
+    while (tmp != nullptr) {
+        if (tmp->connect.cipher == cip) {
+            res = add_in_list(res, tmp->connect);
+        }
+        tmp = tmp->next;
+    }
+    return res;
+}
+
+//функция меню для поиска
+int menu_find() {
+    cout << "----------------------------------------------------------------------\n";
+    cout << "|Введите цифру для работы с программой                                |\n";
+    cout << "|1 - поиск по читательскому билету для читателя или по шифру для книги|\n";
+    cout << "|2 - поиск по ФИО или по названию книги/ФИО авторов                   |\n";
+    cout << "----------------------------------------------------------------------\n";
+    string ask;
+    ask = correct_cin();
+    while ((ask.length() > 1) || (ask.at(0) <= 48) || (ask.at(0) > 50)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+    }
+    int ans = stoi(ask);
+    return ans;
+}
+
+//функция поиска книги/читателя
+void find_book_or_reader(reader tab[2000],list* l,tree* t) {
+    cout << "Для поиска читателя введите 1, для поиска книги 2, для выхода из поиска 0\n";
+    string s;
+    s = correct_cin();
+    int a = stoi(s);
+    if ((a > 2) || (a < 0)) {
+        cout << "Повторите ввод\n";
+        s = correct_cin();
+        a = stoi(s);
+    }
+    if (a == 1) {
+        int ask = menu_find();
+        if (ask == 1) {
+            cout << "Введите номер читательского билета\n";
+            string num_lib_card;
+            num_lib_card = correct_cin();
+            int b = find_h(tab, num_lib_card);
+            while (b == -1) {
+                cout << "Повторите ввод, читатель не найден\n";
+                num_lib_card = correct_cin();
+                b = find_h(tab, num_lib_card);
+            }
+            cout << "Читатель " << tab[b].fns << " читательский билет " << tab[b].number_library_card << " адрес " << tab[b].address << " год рождения " << tab[b].year_birth << " место работы/учебы " << tab[b].place_employment << endl;
+            list* tmp = find_list_bynum(l, num_lib_card);
+            while (tmp != nullptr) {
+                cout << " шифр " << tmp->connect.cipher << " дата выдачи " << tmp->connect.date_issue << " дата возврата " << tmp->connect.return_date << endl;
+                tmp = tmp->next;
+            }
+        }
+        else {//поиск по фио, алгоритм БМ
+            cout << "Введите фио или его часть для поиска\n";
+            string fns;
+            getline(cin, fns);
+            for (int i = 0; i < 2000; i++) {
+                if (tab[i].fns != "\0") {
+                    bool b=search_BM(tab[i].fns, fns);
+                    if (b) {
+                        cout << "ФИО " << tab[i].fns << " номер читательского билета " << tab[i].number_library_card << endl;
+                    }
+                }
+            }
+        }
+    }
+    else if (a == 2) {
+        int ask = menu_find();
+        if (ask == 1) {
+            cout << "Введите шифр книги\n";
+            string cipher;
+            cipher = correct_cin();
+            while (!check_cipher(cipher)) {
+                cout << "Повторите ввод\n";
+                cipher = correct_cin();
+            }
+            int num = getnumfromcipher(cipher);
+            tree* tmp = find_in_tree(t, num);
+            while (tmp == nullptr) {
+                cout << "Повторите ввод, книга не найдена\n";
+                cipher = correct_cin();
+                num = getnumfromcipher(cipher);
+                tmp = find_in_tree(t, num);
+            }
+            cout << "Книга " << tmp->b.title << " шифр " << tmp->b.cipher << " автор " << tmp->b.author << " издательство " << tmp->b.publishing_house << " год издания " << tmp->b.year_publishing << " количество оставшихся экземпляров " << tmp->b.number_copy_stock << " количество экземпляров всего " << tmp->b.number_copy_total << endl;
+            list* tmp1 = find_list_bycipher(l, cipher);
+            while (tmp1 != nullptr) {
+                cout << " шифр " << tmp1->connect.cipher << " дата выдачи " << tmp1->connect.date_issue << " дата возврата " << tmp1->connect.return_date << endl;
+                tmp1 = tmp1->next;
+            }
+        }
+        else {//поиск по фио/названию, алгоритм БМ
+            cout << "Введите фио авторов или название книги для поиска\n";
+            string fns;
+            getline(cin, fns);
+            lis* l1 = nullptr;
+            l1 = traversal(t, l1);
+            lis* l2 = l1;
+            while(l2){
+                bool b = search_BM(l2->b.title, fns);
+                if (b) {
+                    cout << "Название " << l2->b.title << " автор " <<l2->b.author<<" шифр "<<l2->b.cipher << endl;
+                }
+                l2 = l2->next;
+            }
+            while (l1) {
+                bool b = search_BM(l1->b.author, fns);
+                if (b) {
+                    cout << "Название " << l1->b.title << " автор " << l1->b.author << " шифр " << l1->b.cipher << endl;
+                }
+                l1 = l1->next;
+            }
+        }
+    }
+    else {
+        return;
+    }
+}
+
+//функция сравнения читательских билетов
+bool compare_reader(string num1,string num2) {
+    bool ans=false;
+    for (int i=0; i < 8; i++) {
+        if (num1.at(i) > num2.at(i)) {
+            ans = true;
+            return ans;
+        }
+        else if (num2.at(i)==num1.at(i)) {
+            continue;
+        }
+        else {
+            return ans;
+        }
+    }
+    return ans;
+}
+
+//функция сортировки подсчетом
+list* sort(list* l,int ask) {
+    int len = length_list(l);
+    issuance ispr;
+    ispr.cipher = "000000";
+    ispr.number_library_card = "A0000-00";
+    ispr.date_issue = "00";
+    ispr.return_date = "00";
+    issuance* is = new issuance[len];
+    for (int i = 0; i < len; i++) {
+        is[i] = ispr;
+    }
+    list* t1 = l;
+    list* t = l;
+    while (t != nullptr) {
+        list* t2 = l;
+        if (ask == 11) {
+            int cip = getnumfromcipher(t->connect.cipher);
+            int num = 0;
+            while (t2 != nullptr) {
+                if (getnumfromcipher(t2->connect.cipher) < cip) {
+                    num++;
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 12) {
+            int cip = getnumfromcipher(t->connect.cipher);
+            int num = 0;
+            while (t2 != nullptr) {
+                if (getnumfromcipher(t2->connect.cipher) > cip) {
+                    num++;
+                }
+               t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 21) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (compare_reader(t2->connect.number_library_card, t->connect.number_library_card)) {
+                        num++;
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 22) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (compare_reader(t->connect.number_library_card,t2->connect.number_library_card)) {
+                        num++;
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 31) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (date_compare(t2->connect.date_issue, t->connect.date_issue)) {
+                        num++;
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 32) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (date_compare(t->connect.date_issue,t2->connect.date_issue)) {
+                        num++;
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 41) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (t->connect.return_date != "0") {
+                        if (date_compare(t2->connect.return_date, t->connect.return_date)) {
+                            num++;
+                        }
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+        else if (ask == 42) {
+            int num = 0;
+            while (t2 != nullptr) {
+                if (t2 != t) {
+                    if (t->connect.return_date != "0") {
+                        if (date_compare(t->connect.return_date, t2->connect.return_date)) {
+                            num++;
+                        }
+                    }
+                }
+                t2 = t2->next;
+            }
+            while (is[num].cipher != "000000") {
+                num++;
+            }
+            is[num] = t->connect;
+            t = t->next;
+        }
+    }
+    for (int i = 0; i < len; i++) {
+        t1->connect = is[i];
+        t1 = t1->next;
+    }
+    return l;
+}
+
+//функция получения 1 слова из консоли, с последующей очисткой буффера
+string correct_cin() {
+    string s;
+    getline(cin, s, '\n');
+    int l = s.length();
+    for (int i = 0; i < l; i++) {
+        if (s.at(i) == ' ') {
+            s.erase(i);
+            break;
+        }
+    }
+    return s;
+}
+
+//функция проверки на русские буквы и пробел
+bool rus_simbol(string s) {
+    for (int i = 0; i < s.length(); i++) {
+        int n = s.at(i);
+        char c = 192;
+        if (((s.at(i) < 'А') || (s.at(i) > 'я')) && (s.at(i) != 32)) {
+            cout << "Недопустимый символ в ФИО\n";
+            cout << "Повторите ввод ФИО\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+//функция меню редактирования бд
+int menu_edit() {
+    cout << "---------------------------------------\n";
+    cout << "|Введите цифру для работы с программой |\n";
+    cout << "|1 - удаление читателя                 |\n";
+    cout << "|2 - удаление книги                    |\n";
+    cout << "---------------------------------------\n";
+    string ask;
+    ask = correct_cin();
+    while ((ask.length() > 1) || (ask.at(0) < 49) || (ask.at(0) > 50)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+    }
+    int ans = stoi(ask);
+    return ans;
+}
+
+//функция удаления книги или читателя
+list* delete_read_book(reader tab[2000],list*l,tree*t) {
+    list* l1 = l;
+    int edit = menu_edit();
+    if (edit == 1) {
+        string num_lib_card;
+        cout << "Введите номер читательского билета\n";
+        num_lib_card = correct_cin();
+        int n = find_h(tab, num_lib_card);
+        while (n == -1) {
+            cout << "Номер не найден\n";
+            num_lib_card = correct_cin();
+            n = find_h(tab, num_lib_card);
+        }
+        //удалить из списка связи с читателем(вернуть книги)
+        while (l1) {
+            if ((l1->connect.number_library_card == num_lib_card) && (l1->connect.return_date == "0")) {
+                /*int cip = getnumfromcipher(l1->connect.cipher);
+                tree* tmp = find_in_tree(t, cip);
+                tmp->b.number_copy_stock++;
+                l = delete_l(l, l1->connect.cipher, num_lib_card);*/
+                cout << "Есть выданные книги, читатель не может быть удален\n";
+                return l;
+            }
+            else if (l1->connect.number_library_card == num_lib_card) {
+                l1 = delete_l(l1, l1->connect.cipher, num_lib_card);
+            }
+            l1 = l1->next;
+        }
+        if (del_h(tab, num_lib_card)) {
+            cout << "Читатель удален\n";
+        }
+        else {
+            cout << "Не получилось удалить читателя\n";
+        }
+    }
+    else if (edit == 2) {
+        string cipher;
+        cout << "Введите шифр книги\n";
+        cipher = correct_cin();
+        while (!check_cipher(cipher)) {
+            cout << "Введите корректный шифр книги\n";
+            cipher = correct_cin();
+        }
+        int c = getnumfromcipher(cipher);
+        tree* tmp = find_in_tree(t, c);
+        while (tmp == nullptr) {
+            cout << "Шифр не найден\n";
+            cipher = correct_cin();
+            c = getnumfromcipher(cipher);
+            tmp = find_in_tree(t, c);
+        }
+        //удалить из списка связи с книгой(вернуть книги)
+        while (l1) {
+            if ((l1->connect.cipher == cipher)&&(l1->connect.return_date=="0")) {
+                cout << "Книга не может быть удалена, экземпляры выданы на руки\n";
+                return l;
+            }
+            else if (l1->connect.cipher == cipher) {
+                l1 = delete_l(l1, cipher, l1->connect.number_library_card);
+            }
+            l1 = l1->next;
+        }
+        t = delete_el(t, c);
+    }
+    return l1;
+}
+
+//функция меню сортировки 
+int menu_sort() {
+    cout << "--------------------------------------------\n";
+    cout << "|Введите цифру для выбора сортировки        |\n";
+    cout << "|1 - сортировка по шифру книги              |\n";
+    cout << "|2 - сортировка по номеру читательского     |\n";
+    cout << "|3 - сортировка по дате выдачи              |\n";
+    cout << "|4 - сортировка по дате возврата            |\n";
+    cout << "--------------------------------------------\n";
+    string ask;
+    ask = correct_cin();
+    while ((ask.length() > 1) || (ask.at(0) < 49) || (ask.at(0) > 52)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+    }
+    cout << "--------------------------------------------\n";
+    cout << "|Введите цифру для выбора сортировки        |\n";
+    cout << "|1 - сортировка по возрастанию              |\n";
+    cout << "|2 - сортировка по убыванию                 |\n";
+    cout << "--------------------------------------------\n";
+    string ask1;
+    ask1 = correct_cin();
+    while ((ask1.length() > 1) || (ask1.at(0) < 49) || (ask1.at(0) > 50)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+    }
+    ask += ask1;
+    int ans = stoi(ask);
+    return ans;
+}
+
+//функция меню для удаления бд
+int menu_delete() {
+    cout << "---------------------------------------\n";
+    cout << "|Введите цифру для работы с программой |\n";
+    cout << "|1 - удаление базы данных читателей    |\n";
+    cout << "|2 - удаление базы данных книг         |\n";
+    cout << "---------------------------------------\n";
+    string ask;
+    ask = correct_cin();
+    while ((ask.length() > 1) || (ask.at(0) < 49) || (ask.at(0) > 50)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+    }
+    int ans = stoi(ask);
+    return ans;
+}
+
+//функция главного меню
+int menu() {
+    cout << "--------------------------------------------\n";
+    cout << "|Введите цифру для работы с программой      |\n";
+    cout << "|1 - добавление нового читателя             |\n";
+    cout << "|2 - добавление новой книги                 |\n";
+    cout << "|3 - выдача книги                           |\n";
+    cout << "|4 - возврат книги                          |\n";
+    cout << "|5 - вывод базы данных                      |\n";
+    cout << "|6 - сортировка базы данных                 |\n";
+    cout << "|7 - сохранение изменений в базе данных     |\n";
+    cout << "|8 - удаление данных                        |\n";
+    cout << "|9 - поиск читателя или книги               |\n";
+    cout << "|10 - очистить данные о читателях или книгах|\n";
+    cout << "|11 - выход из программы                    |\n";
+    cout << "--------------------------------------------\n";
+    string ask;
+    ask = correct_cin();
+    int ans = stoi(ask);
+    while ((ans>11)||(ans<1)) {
+        cout << "Повторите ввод\n";
+        ask = correct_cin();
+        int ans = stoi(ask);
+    }
+    return ans;
+}
+
+int main()
+{
+    SetConsoleCP(1251);
+    SetConsoleOutputCP(1251);
+    bool loop = true;
+    tree* t = get_tree();
+    reader* tab = record_h();
+    list* l = get_list(tab,t);
+    while (loop) {
+
+        int choose = menu();
+        if (choose == 1) {//добавление читателя
+            reader r = create_reader();
+            int n = hash_f(r.number_library_card);
+            bool b=add_h(tab,n,r);
+            if (b == false) {
+                cout << "Ошибка добавления в хэш-таблицу\n";
+            }
+            else {
+                cout << "Читатель успешно добавлен в хэш-таблицу\n";
+            }
+        }
+        else if (choose == 2) {//добавление книги
+            book b = create_book();
+            int n = getnumfromcipher(b.cipher);
+            t = insert(t, n, b);
+        }
+        else if (choose == 3) {//выдача книги (добавление связи)
+            issuance is = create_issuance(t, tab);
+            if (is.cipher == "0") {
+                
+            }
+            else {
+                l = add_in_list(l, is);
+            }
+        }
+        else if (choose == 4) {//возврат книги
+            issuance is = return_issuance(l);
+            list* t1 = find_in_list(l, is.cipher, is.number_library_card);
+            t1->connect = is;
+            tree* root = find_in_tree(t, getnumfromcipher(is.cipher));
+            if (root->b.number_copy_stock < root->b.number_copy_total) {
+                root->b.number_copy_stock++;
+            }
+        }
+        else if (choose == 5) {//вывод бд
+            show_h(tab);
+            cout << "\n\n";
+            out_tree(t);
+            cout << "\n\n";
+            show_list(l);
+        }
+        else if (choose == 6) {//сортировка бд
+            int ask = menu_sort();
+            l = sort(l,ask);
+        }
+        else if (choose == 7) {//сохранение бд
+            save_hash_tab(tab);
+            save_tree(t);
+            save_list(l);
+            rec_t.close();
+        }
+        else if (choose == 8) {//редактирование бд
+            l=delete_read_book(tab, l, t);
+        }
+        else if (choose == 9) {//поиск читателя/книги
+            find_book_or_reader(tab, l, t);
+        }
+        else if (choose == 10) {//очистить данные о читателях/книгах
+            int ask = menu_delete();
+            if (ask == 1) {
+                for (int i = 0; i < 2000; i++) {
+                    if (tab[i].number_library_card != "\0") {
+                        list* ostbook = find_list_bynum(l, tab[i].number_library_card);
+                        while (ostbook) {
+                            int el = getnumfromcipher(ostbook->connect.cipher);
+                            tree* root = find_in_tree(t, el);
+                            if (root) {
+                                root->b.number_copy_stock = root->b.number_copy_total;
+                            }
+                            ostbook = ostbook->next;
+                        }
+                        tab[i].number_library_card = "\0";
+                        tab[i].address = "\0";
+                        tab[i].fns = "\0";
+                        tab[i].place_employment = "\0";
+                        tab[i].year_birth = 0;
+                    }
+                }
+            }
+            else {
+                delete_full_tree(t);
+                t = nullptr;
+            }
+            l = nullptr;
+        }
+        else  {//выход из цикла
+            loop = false;
+        }
+    }
+}
